@@ -349,6 +349,25 @@ extern "C"{
       }
     }
   }
+  
+  __global__ void kernel_ghost_copy_inv(float* ar, float* out_left, float* out_right, int sx, int sy, int sz){
+    int y_mul_max = sy / 256;
+    for(int z = 0; z < 3; z++){
+      for(int y_mul = 0; y_mul <= y_mul_max; y_mul++){
+	int y = y_mul * 256 + threadIdx.x;
+	if(y < sy){
+	  int base_addr_lin = (z * sy + y) * sx;
+	  int base_addr_left = ((z + 0) * sy + y) * sx;
+	  int base_addr_right = ((sz - 3 + z) * sy + y) * sx;
+	  for(int x = 0; x < sx; x++){
+	    ar[base_addr_left + x] = out_left[base_addr_lin + x];
+	    ar[base_addr_right + x] = out_right[base_addr_lin + x];
+	  }
+	}
+      }
+    }
+  }
+
   __global__ void kernel_source(float* ar, int sx, int sy, int sz){
     ar[((3) * sy + sy / 2) * sx + sx / 2] = 1.0f;
   }
