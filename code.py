@@ -1,7 +1,7 @@
 #!/usr/bin/python2
 
 import argparse
-parser = argparse.ArgumentParser(description='3D Cuda finite difference solver')
+parser = argparse.ArgumentParser(description = '3D Cuda finite difference solver')
 args = parser.parse_args()
 
 import numpy as np
@@ -20,9 +20,9 @@ slave = not master
 rank_left = (mpi.rank - 1) % (mpi.size - 1)
 rank_right = (mpi.rank + 1) % (mpi.size - 1)
 
-pprint('|'*74)
+pprint('/'*74)
 pprint(' Running on %d cores' % mpi.size)
-pprint('|'*74)
+pprint('\\'*74)
 
 mpi.Barrier()
 
@@ -42,7 +42,7 @@ if master:
         mapping[k].append(v)
 
     for k, v in mapping.iteritems():
-        for gpu_id, rank in zip(range(4), v):
+        for gpu_id, rank in enumerate(v):
             mpi.send(gpu_id, dest = rank, tag = 0x400b)
 else:
     debug(' before send')
@@ -94,8 +94,8 @@ else: # master
 
 mpi.Barrier()
 
-iterations = 1000
-savefreq = 100
+iterations = 100
+savefreq = 1
 
 if slave:
     kernel_source = mod.get_function('kernel_source')
