@@ -1,0 +1,4 @@
+#!/bin/sh
+export LD_PRELOAD=libblas.so.3.2.1:libboost_python-mt.so.5:libboost_thread-mt.so.5:liblapack.so.3.2.1
+mpirun --hostfile hostfile -x LD_PRELOAD --mca orte_base_help_aggregate 0 --mca mpi_warn_on_fork 0 --mca mca_param_files mca.log --mca btl tcp,self ./code.py
+
