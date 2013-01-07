@@ -1,4 +1,15 @@
 extern "C"{
+
+  __device__ float lap(float shar[14][14][14], float ddm2, int x, int y, int z, int ox, int oy, int oz, int c){
+    int m = c - 1;
+    int p = c + 1;
+    return ddm2 *
+      (shar[x + ox + m][y + oy + c][z + oz + c] + shar[x + ox + p][y + oy + c][z + oz + c]
+       + shar[x + ox + c][y + oy + m][z + oz + c] + shar[x + ox + c][y + oy + p][z + oz + c]
+       + shar[x + ox + c][y + oy + c][z + oz + m] + shar[x + ox + c][y + oy + c][z + oz + p]
+       - 6.0f * shar[x + ox + c][y + oy + c][z + oz + c]);
+  }
+
   __global__ void kernel_timestep(float* in, float* out, int sx, int sy, int sz, float ddm2){
 
     __shared__ float cache[14][14][14];
@@ -35,89 +46,35 @@ extern "C"{
     // compute lap  
     // phase 0,0,0
     int ox = 0; int oy = 0; int oz = 0;
-    cache_lap[x + ox + 1][y + oy + 1][z + oz + 1] =
-      ddm2 * 
-      (cache[x + ox + 0][y + oy + 1][z + oz + 1] + cache[x + ox + 2][y + oy + 1][z + oz + 1]
-       + cache[x + ox + 1][y + oy + 0][z + oz + 1] + cache[x + ox + 1][y + oy + 2][z + oz + 1]
-       + cache[x + ox + 1][y + oy + 1][z + oz + 0] + cache[x + ox + 1][y + oy + 1][z + oz + 2]
-       - 6.0f * cache[x + ox + 1][y + oy + 1][z + oz + 1]);
+    cache_lap[x + ox + 1][y + oy + 1][z + oz + 1] = lap(cache, ddm2, x, y, z, ox, oy, oz, 1);
     __syncthreads();
     // phase x,0,0
     ox = 8; oy = 0; oz = 0;
-    if(x < 4){
-      cache_lap[x + ox + 1][y + oy + 1][z + oz + 1] =
-	ddm2 * 
-	(cache[x + ox + 0][y + oy + 1][z + oz + 1] + cache[x + ox + 2][y + oy + 1][z + oz + 1]
-	 + cache[x + ox + 1][y + oy + 0][z + oz + 1] + cache[x + ox + 1][y + oy + 2][z + oz + 1]
-	 + cache[x + ox + 1][y + oy + 1][z + oz + 0] + cache[x + ox + 1][y + oy + 1][z + oz + 2]
-	 - 6.0f * cache[x + ox + 1][y + oy + 1][z + oz + 1]);
-    }
+    if(x < 4) cache_lap[x + ox + 1][y + oy + 1][z + oz + 1] = lap(cache, ddm2, x, y, z, ox, oy, oz, 1);
     __syncthreads();
     // phase 0,y,0
     ox = 0; oy = 8; oz = 0;
-    if(y < 4){
-      cache_lap[x + ox + 1][y + oy + 1][z + oz + 1] =
-	ddm2 * 
-	(cache[x + ox + 0][y + oy + 1][z + oz + 1] + cache[x + ox + 2][y + oy + 1][z + oz + 1]
-	 + cache[x + ox + 1][y + oy + 0][z + oz + 1] + cache[x + ox + 1][y + oy + 2][z + oz + 1]
-	 + cache[x + ox + 1][y + oy + 1][z + oz + 0] + cache[x + ox + 1][y + oy + 1][z + oz + 2]
-	 - 6.0f * cache[x + ox + 1][y + oy + 1][z + oz + 1]);
-    }
+    if(y < 4) cache_lap[x + ox + 1][y + oy + 1][z + oz + 1] = lap(cache, ddm2, x, y, z, ox, oy, oz, 1);
     __syncthreads();
     // phase 0,0,z
     ox = 0; oy = 0; oz = 8;
-    if(z < 4){
-      cache_lap[x + ox + 1][y + oy + 1][z + oz + 1] =
-	ddm2 * 
-	(cache[x + ox + 0][y + oy + 1][z + oz + 1] + cache[x + ox + 2][y + oy + 1][z + oz + 1]
-	 + cache[x + ox + 1][y + oy + 0][z + oz + 1] + cache[x + ox + 1][y + oy + 2][z + oz + 1]
-	 + cache[x + ox + 1][y + oy + 1][z + oz + 0] + cache[x + ox + 1][y + oy + 1][z + oz + 2]
-	 - 6.0f * cache[x + ox + 1][y + oy + 1][z + oz + 1]);
-    }
+    if(z < 4) cache_lap[x + ox + 1][y + oy + 1][z + oz + 1] = lap(cache, ddm2, x, y, z, ox, oy, oz, 1);
     __syncthreads();
     // phase x,y,0
     ox = 8; oy = 8; oz = 0;
-    if(x < 4 && y < 4){
-      cache_lap[x + ox + 1][y + oy + 1][z + oz + 1] =
-	ddm2 * 
-	(cache[x + ox + 0][y + oy + 1][z + oz + 1] + cache[x + ox + 2][y + oy + 1][z + oz + 1]
-	 + cache[x + ox + 1][y + oy + 0][z + oz + 1] + cache[x + ox + 1][y + oy + 2][z + oz + 1]
-	 + cache[x + ox + 1][y + oy + 1][z + oz + 0] + cache[x + ox + 1][y + oy + 1][z + oz + 2]
-	 - 6.0f * cache[x + ox + 1][y + oy + 1][z + oz + 1]);
-    }
+    if(x < 4 && y < 4) cache_lap[x + ox + 1][y + oy + 1][z + oz + 1] = lap(cache, ddm2, x, y, z, ox, oy, oz, 1);
     __syncthreads();
     // phase x,0,z
     ox = 8; oy = 0; oz = 8;
-    if(x < 4 && z < 4){
-      cache_lap[x + ox + 1][y + oy + 1][z + oz + 1] =
-	ddm2 * 
-	(cache[x + ox + 0][y + oy + 1][z + oz + 1] + cache[x + ox + 2][y + oy + 1][z + oz + 1]
-	 + cache[x + ox + 1][y + oy + 0][z + oz + 1] + cache[x + ox + 1][y + oy + 2][z + oz + 1]
-	 + cache[x + ox + 1][y + oy + 1][z + oz + 0] + cache[x + ox + 1][y + oy + 1][z + oz + 2]
-	 - 6.0f * cache[x + ox + 1][y + oy + 1][z + oz + 1]);
-    }
+    if(x < 4 && z < 4) cache_lap[x + ox + 1][y + oy + 1][z + oz + 1] = lap(cache, ddm2, x, y, z, ox, oy, oz, 1);
     __syncthreads();
     // phase 0,y,z
     ox = 0; oy = 8; oz = 8;
-    if(y < 4 && z < 4){
-      cache_lap[x + ox + 1][y + oy + 1][z + oz + 1] =
-	ddm2 * 
-	(cache[x + ox + 0][y + oy + 1][z + oz + 1] + cache[x + ox + 2][y + oy + 1][z + oz + 1]
-	 + cache[x + ox + 1][y + oy + 0][z + oz + 1] + cache[x + ox + 1][y + oy + 2][z + oz + 1]
-	 + cache[x + ox + 1][y + oy + 1][z + oz + 0] + cache[x + ox + 1][y + oy + 1][z + oz + 2]
-	 - 6.0f * cache[x + ox + 1][y + oy + 1][z + oz + 1]);
-    }
+    if(y < 4 && z < 4) cache_lap[x + ox + 1][y + oy + 1][z + oz + 1] = lap(cache, ddm2, x, y, z, ox, oy, oz, 1);
     __syncthreads();
     // phase x,y,z
     ox = 8; oy = 8; oz = 8;
-    if(x < 4 && y < 4 && z < 4){
-      cache_lap[x + ox + 1][y + oy + 1][z + oz + 1] =
-	ddm2 * 
-	(cache[x + ox + 0][y + oy + 1][z + oz + 1] + cache[x + ox + 2][y + oy + 1][z + oz + 1]
-	 + cache[x + ox + 1][y + oy + 0][z + oz + 1] + cache[x + ox + 1][y + oy + 2][z + oz + 1]
-	 + cache[x + ox + 1][y + oy + 1][z + oz + 0] + cache[x + ox + 1][y + oy + 1][z + oz + 2]
-	 - 6.0f * cache[x + ox + 1][y + oy + 1][z + oz + 1]);
-    }
+    if(x < 4 && y < 4 && z < 4) cache_lap[x + ox + 1][y + oy + 1][z + oz + 1] = lap(cache, ddm2, x, y, z, ox, oy, oz, 1);
     __syncthreads();
     // ********************************************************************************
 
@@ -126,100 +83,41 @@ extern "C"{
     // compute lap2
     // phase 0,0,0
     ox = 0; oy = 0; oz = 0;
-    cache_lap2[x + ox + 2][y + oy + 2][z + oz + 2] =
-      ddm2 *
-      (cache_lap[x + ox + 1][y + oy + 2][z + oz + 2] + cache_lap[x + ox + 3][y + oy + 2][z + oz + 2]
-       + cache_lap[x + ox + 2][y + oy + 1][z + oz + 2] + cache_lap[x + ox + 2][y + oy + 3][z + oz + 2]
-       + cache_lap[x + ox + 2][y + oy + 2][z + oz + 1] + cache_lap[x + ox + 2][y + oy + 2][z + oz + 3]
-       - 6.0f * cache_lap[x + ox + 2][y + oy + 2][z + oz + 2] );
+    cache_lap2[x + ox + 2][y + oy + 2][z + oz + 2] = lap(cache_lap, ddm2, x, y, z, ox, oy, oz, 2);
     __syncthreads();
     // phase x,0,0
     ox = 8; oy = 0; oz = 0;
-    if(x < 2){
-      cache_lap2[x + ox + 2][y + oy + 2][z + oz + 2] =
-	ddm2 *
-	(cache_lap[x + ox + 1][y + oy + 2][z + oz + 2] + cache_lap[x + ox + 3][y + oy + 2][z + oz + 2]
-	 + cache_lap[x + ox + 2][y + oy + 1][z + oz + 2] + cache_lap[x + ox + 2][y + oy + 3][z + oz + 2]
-	 + cache_lap[x + ox + 2][y + oy + 2][z + oz + 1] + cache_lap[x + ox + 2][y + oy + 2][z + oz + 3]
-	 - 6.0f * cache_lap[x + ox + 2][y + oy + 2][z + oz + 2] );
-    }
+    if(x < 2) cache_lap2[x + ox + 2][y + oy + 2][z + oz + 2] = lap(cache_lap, ddm2, x, y, z, ox, oy, oz, 2);
     __syncthreads();
     // phase 0,y,0
     ox = 0; oy = 8; oz = 0;
-    if(y < 2){
-      cache_lap2[x + ox + 2][y + oy + 2][z + oz + 2] =
-	ddm2 *
-	(cache_lap[x + ox + 1][y + oy + 2][z + oz + 2] + cache_lap[x + ox + 3][y + oy + 2][z + oz + 2]
-	 + cache_lap[x + ox + 2][y + oy + 1][z + oz + 2] + cache_lap[x + ox + 2][y + oy + 3][z + oz + 2]
-	 + cache_lap[x + ox + 2][y + oy + 2][z + oz + 1] + cache_lap[x + ox + 2][y + oy + 2][z + oz + 3]
-	 - 6.0f * cache_lap[x + ox + 2][y + oy + 2][z + oz + 2] );
-    }
+    if(y < 2) cache_lap2[x + ox + 2][y + oy + 2][z + oz + 2] = lap(cache_lap, ddm2, x, y, z, ox, oy, oz, 2);
     __syncthreads();
     // phase 0,0,z
     ox = 0; oy = 0; oz = 8;
-    if(z < 2){
-      cache_lap2[x + ox + 2][y + oy + 2][z + oz + 2] =
-	ddm2 *
-	(cache_lap[x + ox + 1][y + oy + 2][z + oz + 2] + cache_lap[x + ox + 3][y + oy + 2][z + oz + 2]
-	 + cache_lap[x + ox + 2][y + oy + 1][z + oz + 2] + cache_lap[x + ox + 2][y + oy + 3][z + oz + 2]
-	 + cache_lap[x + ox + 2][y + oy + 2][z + oz + 1] + cache_lap[x + ox + 2][y + oy + 2][z + oz + 3]
-	 - 6.0f * cache_lap[x + ox + 2][y + oy + 2][z + oz + 2] );
-    }
+    if(z < 2) cache_lap2[x + ox + 2][y + oy + 2][z + oz + 2] = lap(cache_lap, ddm2, x, y, z, ox, oy, oz, 2);
     __syncthreads();
     // phase x,y,0
     ox = 8; oy = 8; oz = 0;
-    if(x < 2 && y < 2){
-      cache_lap2[x + ox + 2][y + oy + 2][z + oz + 2] =
-	ddm2 *
-	(cache_lap[x + ox + 1][y + oy + 2][z + oz + 2] + cache_lap[x + ox + 3][y + oy + 2][z + oz + 2]
-	 + cache_lap[x + ox + 2][y + oy + 1][z + oz + 2] + cache_lap[x + ox + 2][y + oy + 3][z + oz + 2]
-	 + cache_lap[x + ox + 2][y + oy + 2][z + oz + 1] + cache_lap[x + ox + 2][y + oy + 2][z + oz + 3]
-	 - 6.0f * cache_lap[x + ox + 2][y + oy + 2][z + oz + 2] );
-    }
+    if(x < 2 && y < 2) cache_lap2[x + ox + 2][y + oy + 2][z + oz + 2] = lap(cache_lap, ddm2, x, y, z, ox, oy, oz, 2);
     __syncthreads();
     // phase x,0,z
     ox = 8; oy = 0; oz = 8;
-    if(x < 2 && z < 2){
-      cache_lap2[x + ox + 2][y + oy + 2][z + oz + 2] =
-	ddm2 *
-	(cache_lap[x + ox + 1][y + oy + 2][z + oz + 2] + cache_lap[x + ox + 3][y + oy + 2][z + oz + 2]
-	 + cache_lap[x + ox + 2][y + oy + 1][z + oz + 2] + cache_lap[x + ox + 2][y + oy + 3][z + oz + 2]
-	 + cache_lap[x + ox + 2][y + oy + 2][z + oz + 1] + cache_lap[x + ox + 2][y + oy + 2][z + oz + 3]
-	 - 6.0f * cache_lap[x + ox + 2][y + oy + 2][z + oz + 2] );
-    }
+    if(x < 2 && z < 2) cache_lap2[x + ox + 2][y + oy + 2][z + oz + 2] = lap(cache_lap, ddm2, x, y, z, ox, oy, oz, 2);
     __syncthreads();
     // phase 0,y,z
     ox = 0; oy = 8; oz = 8;
-    if(y < 2 && z < 2){
-      cache_lap2[x + ox + 2][y + oy + 2][z + oz + 2] =
-	ddm2 *
-	(cache_lap[x + ox + 1][y + oy + 2][z + oz + 2] + cache_lap[x + ox + 3][y + oy + 2][z + oz + 2]
-	 + cache_lap[x + ox + 2][y + oy + 1][z + oz + 2] + cache_lap[x + ox + 2][y + oy + 3][z + oz + 2]
-	 + cache_lap[x + ox + 2][y + oy + 2][z + oz + 1] + cache_lap[x + ox + 2][y + oy + 2][z + oz + 3]
-	 - 6.0f * cache_lap[x + ox + 2][y + oy + 2][z + oz + 2] );
-    }
+    if(y < 2 && z < 2) cache_lap2[x + ox + 2][y + oy + 2][z + oz + 2] = lap(cache_lap, ddm2, x, y, z, ox, oy, oz, 2);
     __syncthreads();
     // phase x,y,z
     ox = 8; oy = 8; oz = 8;
-    if(x < 2 && y < 2 && z < 2){
-      cache_lap2[x + ox + 2][y + oy + 2][z + oz + 2] =
-	ddm2 *
-	(cache_lap[x + ox + 1][y + oy + 2][z + oz + 2] + cache_lap[x + ox + 3][y + oy + 2][z + oz + 2]
-	 + cache_lap[x + ox + 2][y + oy + 1][z + oz + 2] + cache_lap[x + ox + 2][y + oy + 3][z + oz + 2]
-	 + cache_lap[x + ox + 2][y + oy + 2][z + oz + 1] + cache_lap[x + ox + 2][y + oy + 2][z + oz + 3]
-	 - 6.0f * cache_lap[x + ox + 2][y + oy + 2][z + oz + 2] );
-    }
+    if(x < 2 && y < 2 && z < 2) cache_lap2[x + ox + 2][y + oy + 2][z + oz + 2] = lap(cache_lap, ddm2, x, y, z, ox, oy, oz, 2);
     __syncthreads();
     // ********************************************************************************
 
     // ********************************************************************************
     // compute lap3
-    cache_lap3[x + 3][y + 3][z + 3] =
-      ddm2 *
-      (cache_lap2[x + 2][y + 3][z + 3] + cache_lap2[x + 4][y + 3][z + 3]
-       + cache_lap2[x + 3][y + 2][z + 3] + cache_lap2[x + 3][y + 4][z + 3]
-       + cache_lap2[x + 3][y + 3][z + 2] + cache_lap2[x + 3][y + 3][z + 4]
-       - 6.0f * cache_lap2[x + 3][y + 3][z + 3]);
+    cache_lap3[x + 3][y + 3][z + 3] = lap(cache_lap2, ddm2, x, y, z, 0, 0, 0, 3);
     __syncthreads();
     // ********************************************************************************
 
@@ -231,8 +129,7 @@ extern "C"{
     float zm = cache[x + 3][y + 3][z + 2];
     float zp = cache[x + 3][y + 3][z + 4];
 
-    float lapPsi3 =
-      ddm2 *
+    float lapPsi3 = ddm2 *
       (xm * xm * xm + xp * xp * xp
        + ym * ym * ym + yp * yp * yp
        + zm * zm * zm + zp * zp * zp
@@ -264,6 +161,8 @@ extern "C"{
     // ********************************************************************************
   }
 
+
+
   __device__ int ifun(int sx, int sy, int sz, int x, int y, int z){ return (z * sy + y) * sx + x; }
 #define I(x,y,z) ifun(sx, sy, sz, x, y, z)
   __device__ int mod(float a, float b){ return ((int)a) - ((int)b) * floor(a / b); }
@@ -279,6 +178,7 @@ extern "C"{
     int x_mul_max = sx / 16;
     int y_mul_max = sy / 16;
     int z_mul_max = sz / 16;
+
     // x - y
     // for(int x_mul = 0; x_mul <= x_mul_max; x_mul++){
     //   for(int y_mul = 0; y_mul <= y_mul_max; y_mul++){
@@ -296,6 +196,7 @@ extern "C"{
     //     }
     //   }
     // }  
+
     // x - z
     for(int x_mul = 0; x_mul <= x_mul_max; x_mul++){
       for(int z_mul = 0; z_mul <= z_mul_max; z_mul++){
@@ -313,6 +214,7 @@ extern "C"{
 	}
       }
     }
+    
     // y - z
     for(int y_mul = 0; y_mul <= y_mul_max; y_mul++){
       for(int z_mul = 0; z_mul <= z_mul_max; z_mul++){

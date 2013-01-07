@@ -94,7 +94,7 @@ else: # master
 
 mpi.Barrier()
 
-iterations = 100
+iterations = 500
 savefreq = 1
 
 if slave:
@@ -127,27 +127,27 @@ if slave:
         kernel_timestep(d_domain, d_domain_p, np.int32(dimx), np.int32(dimy), np.int32(dimz), np.float32(1), block = (bx, by, bz), grid = (gx, gy, gz))
 #        debug('1')
         # ensure PBC on d_domain_p except in the z direction
-#        kernel_pbc_noz(d_domain_p, np.int32(dimx), np.int32(dimy), np.int32(dimz), block = (16, 16, 1), grid = (1, 1, 1))
+        kernel_pbc_noz(d_domain_p, np.int32(dimx), np.int32(dimy), np.int32(dimz), block = (16, 16, 1), grid = (1, 1, 1))
 #        debug('2')
         # copy ghost z direction ghost zones to linear memory on device
-#        kernel_ghost_copy(d_domain_p, d_left, d_right, np.int32(dimx), np.int32(dimy), np.int32(dimz), block = (256, 1, 1), grid = (1, 1, 1))
+        kernel_ghost_copy(d_domain_p, d_left, d_right, np.int32(dimx), np.int32(dimy), np.int32(dimz), block = (256, 1, 1), grid = (1, 1, 1))
 #        debug('3')
         # copy ghost z direction ghost zones from device to host
-        # cuda.memcpy_dtoh(h_give_left, d_left)
-        # cuda.memcpy_dtoh(h_give_right, d_right)
+        cuda.memcpy_dtoh(h_give_left, d_left)
+        cuda.memcpy_dtoh(h_give_right, d_right)
         # send & recv these
-        # r_left = mpi.Irecv(h_recv_left, source = rank_left, tag = rank_left)
-        # r_right = mpi.Irecv(h_recv_right, source = rank_right, tag = rank_right)
-        # mpi.Isend(h_give_left, dest = rank_left, tag = mpi.rank)
-        # mpi.Isend(h_give_right, dest = rank_right, tag = mpi.rank)
-        # r_left.Wait()
-        # r_right.Wait()
+        r_left = mpi.Irecv(h_recv_left, source = rank_left, tag = rank_left)
+        r_right = mpi.Irecv(h_recv_right, source = rank_right, tag = rank_right)
+        mpi.Isend(h_give_left, dest = rank_left, tag = mpi.rank)
+        mpi.Isend(h_give_right, dest = rank_right, tag = mpi.rank)
+        r_left.Wait()
+        r_right.Wait()
         # copy ghost z direction ghost zones from host to device
-        # cuda.memcpy_htod(d_left, h_recv_left)
-        # cuda.memcpy_htod(d_right, h_recv_right)
+        cuda.memcpy_htod(d_left, h_recv_left)
+        cuda.memcpy_htod(d_right, h_recv_right)
 #        debug('6')
         # copy ghost z direction ghost zones from linear memory on device
-#        kernel_ghost_copy_inv(d_domain_p, d_left, d_right, np.int32(dimx), np.int32(dimy), np.int32(dimz), block = (256, 1, 1), grid = (1, 1, 1))
+        kernel_ghost_copy_inv(d_domain_p, d_left, d_right, np.int32(dimx), np.int32(dimy), np.int32(dimz), block = (256, 1, 1), grid = (1, 1, 1))
 #        debug('7')
         # copy d_domain_p to d_domain
         cuda.memcpy_dtod(d_domain, d_domain_p, h_domain.nbytes)
@@ -163,8 +163,10 @@ else: # master
             [mpi.Recv(h_domains[i], source = i, tag = 0x5a43) for i in range(mpi.size - 1)]
             # rs = [mpi.Irecv(h_domains[i], source = i, tag = 0x5a43) for i in range(mpi.size - 1)]
             # [r.Wait() for r in rs]
-            save = np.hstack(h_domains).transpose()
-            save.tofile('out_%.8d_%dx%d.bin' % (iters, save.shape[0], save.shape[1]))
+#            [debug('%d - %d' % ar.shape) for ar in h_domains]
+            save = np.vstack(h_domains).transpose()
+#            save = h_domains[3]
+            save.tofile('out_%.8d_%dx%d.bin' % (iters, save.shape[1], save.shape[0]))
             mpi.Barrier()
         iters += 1
 
