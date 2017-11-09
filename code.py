@@ -2,7 +2,7 @@
 
 def debug(msg):
     print ('rank %d: ' + msg) % mpi.rank
-    
+
 def debug0(msg):
     if master:
         print msg
@@ -14,32 +14,43 @@ args = parser.parse_args()
 import numpy as np
 from mpi4py import MPI
 
+from parutils import pprint
+#def pprint(*args):
+#    if mpi.rank == 0:
+#        print(*args)
+
+
 # globals
 mpi = MPI.COMM_WORLD
 if mpi.size <= 1:
-    print 'mpi.size needs to be greater than 0'
-    exit(0)
+    print('mpi.size needs to be greater than 1')
+    exit(1)
 master = mpi.size == mpi.rank + 1
-master_rank = mpi.size - 1
 slave = not master
-rank_left = (mpi.rank - 1) % (mpi.size - 1)
-rank_right = (mpi.rank + 1) % (mpi.size - 1)
+slaves = mpi.size - 1
+master_rank = slaves
+rank_left = (mpi.rank - 1) % slaves
+rank_right = (mpi.rank + 1) % slaves
 
-debug0('/'*74)
-debug0(' Running on %d cores' % mpi.size)
-debug0('\\'*74)
+pprint('/'*74)
+pprint('Running on %d cards' % slaves)
+pprint('\\'*74)
 
 mpi.Barrier()
 
 #lx, ly, lz = 10.0*2.0*np.pi, 1.0*2.0*np.pi, 10.0*2.0*np.pi
-lx, ly, lz = 100.0*2.0*np.pi, 1.0*2.0*np.pi, 25.0*2.0*np.pi
+lx, ly, lz = 20.0*2.0*np.pi, 20.0*2.0*np.pi, 20.0*2.0*np.pi
 bx, by, bz = 8, 8, 8
-gx, gy, gz = 400, 4, 100
+gx, gy, gz = 20, 20, 20
 nx, ny, nz = bx * gx, by * gy, bz * gz
-dimx, dimy, dimz = bx * gx + 6, by * gy + 6, bz * gz + 6
+dimx, dimy, dimz = nx + 6, ny + 6, nz + 6
+pprint('domain is %d x %d x %d' % (dimx, dimy, dimz))
 dx, dy, dz = float(lx) / float(nx), float(ly) / float(ny), float(lz) / float(nz)
-ddm2 = (float(lx) / float(nx)) ** (-2.0)
+ddm2 = dx ** (-2.0)
 elements = dimx * dimy * dimz
+
+def debug(msg):
+    print(('rank %d: ' + msg) % mpi.rank)
 
 # assigning GPU ids to ranks
 if master:
@@ -51,12 +62,11 @@ if master:
     for k, v in mapping.iteritems():
         for gpu_id, rank in enumerate(v):
             mpi.send(gpu_id, dest = rank, tag = 0x400b)
+    gpu_id = -1
 else:
-    debug(' before send')
     mpi.send((MPI.Get_processor_name(), mpi.rank), dest = master_rank, tag = 0x1334)
-    debug(' after send, before recv')
     gpu_id = mpi.recv(source = master_rank, tag = 0x400b)
-    debug(' after recv')
+print('rank %d has gpu_id %d' % (mpi.rank, gpu_id))
 mpi.Barrier()
 
 # compiling cubin and loading it up
@@ -65,11 +75,10 @@ if master:
     subprocess.check_call(['nvcc', '--cubin', '-arch', 'sm_20', 'kernel_semi.cu'])
     for i in range(mpi.size - 1):
         mpi.send(None, dest = i, tag = 0xdeadbee)
-    debug('cubin compiled, msg sent')
+#    debug('cubin compiled, msg sent')
 else:
     import pycuda.driver as cuda
     cuda.init()
-    debug('init completed')
     device = cuda.Device(gpu_id)
     device.make_context()
     mpi.recv(source = master_rank, tag = 0xdeadbee)
@@ -114,11 +123,11 @@ if slave:
     h_domain = np.zeros((dimz, dimy, dimx), dtype = np.float32)
     init_nucleus(h_domain)
 
-    d_domain = cuda.mem_alloc(h_domain.nbytes)
+    d_domain   = cuda.mem_alloc(h_domain.nbytes)
     d_domain_p = cuda.mem_alloc(h_domain.nbytes)
 
-    d_left = cuda.mem_alloc(dimx * dimy * 3 * 4)
-    d_right = cuda.mem_alloc(dimx * dimy * 3 * 4)
+    d_left     = cuda.mem_alloc(dimx * dimy * 3 * 4)
+    d_right    = cuda.mem_alloc(dimx * dimy * 3 * 4)
 
     h_give_left  = np.zeros(dimx * dimy * 3, dtype = np.float32)
     h_give_right = np.zeros(dimx * dimy * 3, dtype = np.float32)
@@ -128,7 +137,6 @@ if slave:
 else: # master
     h_domains = [np.zeros((dimz - 6, dimx - 6), dtype = np.float32) for _ in range(mpi.size - 1)]
     #    h_domains = [np.zeros((dimx, dimz), dtype = np.float32) for _ in range(mpi.size - 1)]
-    
 
 mpi.Barrier()
 
@@ -146,9 +154,9 @@ if slave:
     # copy host array to device
     cuda.memcpy_htod(d_domain, h_domain)
     cuda.memcpy_htod(d_domain_p, h_domain)
-    
+
     iters = 0
-    
+
     # initial synchronization
     kernel_pbc_noz(d_domain_p, np.int32(dimx), np.int32(dimy), np.int32(dimz), block = (16, 16, 1), grid = (1, 1, 1))
     kernel_ghost_copy(d_domain_p, d_left, d_right, np.int32(dimx), np.int32(dimy), np.int32(dimz), block = (256, 1, 1), grid = (1, 1, 1))
@@ -164,7 +172,6 @@ if slave:
     cuda.memcpy_htod(d_right, h_recv_right)
     kernel_ghost_copy_inv(d_domain_p, d_left, d_right, np.int32(dimx), np.int32(dimy), np.int32(dimz), block = (256, 1, 1), grid = (1, 1, 1))
     cuda.memcpy_dtod(d_domain, d_domain_p, h_domain.nbytes)
-
 
     mpi.Barrier()
     while iters < iterations:
@@ -182,7 +189,7 @@ if slave:
 
         iters += 1
 
-        # source term        
+        # source term
         # if mpi.rank == 0:
         #     kernel_source(d_domain, np.int32(dimx), np.int32(dimy), np.int32(dimz), block = (1,1,1), grid = (1,1))
         # timestep: compute d_domain_p from d_domain
@@ -193,7 +200,7 @@ if slave:
 
         # ensure PBC on d_domain_p except in the z direction
         kernel_pbc_noz(d_domain_p, np.int32(dimx), np.int32(dimy), np.int32(dimz), block = (16, 16, 1), grid = (1, 1, 1))
-        
+
         # copy ghost z direction ghost zones to linear memory on device
         kernel_ghost_copy(d_domain_p, d_left, d_right, np.int32(dimx), np.int32(dimy), np.int32(dimz), block = (256, 1, 1), grid = (1, 1, 1))
         # copy ghost z direction ghost zones from device to host
@@ -211,7 +218,7 @@ if slave:
         cuda.memcpy_htod(d_right, h_recv_right)
         # copy ghost z direction ghost zones from linear memory on device
         kernel_ghost_copy_inv(d_domain_p, d_left, d_right, np.int32(dimx), np.int32(dimy), np.int32(dimz), block = (256, 1, 1), grid = (1, 1, 1))
-        
+
         # finalize: copy d_domain_p over to d_domain
         cuda.memcpy_dtod(d_domain, d_domain_p, h_domain.nbytes)
 
